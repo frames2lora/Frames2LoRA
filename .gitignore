@@ -7,6 +7,15 @@ results/
 datasets/
 llm-comparator/
 trained_d2l/
+checkpoints/
+runs/
+outputs/
+data/video2lora/
+hf_key*
+wandb_key*
+pat_token*
+cookie.txt
+www.youtube.com_cookies.txt
 # Ignore data files but not scripts
 /data/processed_datasets/
 /data/raw_datasets/

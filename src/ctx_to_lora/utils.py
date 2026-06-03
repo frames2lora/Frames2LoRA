@@ -38,10 +38,31 @@ def evaluating(*models):
                 model.train(training)
 
 
+def get_decoder_model(model):
+    visited = set()
+    current = model
+    while id(current) not in visited:
+        visited.add(id(current))
+        if hasattr(current, "model") and getattr(current, "model") is not current:
+            current = current.model
+            continue
+        if hasattr(current, "text_model") and getattr(current, "text_model") is not current:
+            current = current.text_model
+            continue
+        if hasattr(current, "language_model") and getattr(current, "language_model") is not current:
+            current = current.language_model
+            continue
+        break
+    return current
+
+
 def get_layers(model):
-    if hasattr(model, "model"):
-        return get_layers(model.model)
-    return model.layers
+    model = get_decoder_model(model)
+    if hasattr(model, "layers"):
+        return model.layers
+    if hasattr(model, "decoder") and hasattr(model.decoder, "layers"):
+        return model.decoder.layers
+    raise AttributeError(f"Could not find decoder layers for model type {type(model)!r}")
 
 
 def get_num_layers(model):
@@ -49,9 +70,7 @@ def get_num_layers(model):
 
 
 def get_base_model(model):
-    if hasattr(model, "model"):
-        return get_base_model(model.model)
-    return model
+    return get_decoder_model(model)
 
 
 def get_num_params(model):

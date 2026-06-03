@@ -1,49 +1,48 @@
 [project]
-name = "ctx-to-lora"
-version = "0.0.1"
-authors = [{ name = "Rujikorn Charakorn" }]
-description = ""
+name = "video2lora"
+version = "0.1.0"
+authors = [{ name = "Video2LoRA authors" }]
+description = "Video-conditioned LoRA generation for vision-language models."
 readme = "README.md"
-requires-python = ">= 3.10"
+requires-python = ">=3.10"
 dependencies = [
-    "transformers==4.51.3",
-    "deepspeed==0.17.1",
     "accelerate==1.6.0",
+    "av>=17.0.0",
+    "bitsandbytes>=0.46.1",
     "datasets==3.6.0",
-    "setuptools",
-    "peft",
-    "jupyter",
-    "matplotlib",
-    "hf_transfer",
-    "torchmetrics",
-    "inflect",
-    "pre-commit",
-    "tensorboardX",
-    "wandb",
-    "fasttext-wheel",
+    "decord",
     "einops",
+    "gdown>=5.1.0",
+    "hf_transfer",
+    "huggingface-hub[hf-transfer]>=0.32.0",
     "jaxtyping",
     "liger-kernel",
-    "tensorboard",
-    "flask",
-    "gradio>=4.40.0",
-    "pandas",
-    "plotly",
-    "rouge-score",
-    "vllm==0.8.5.post1",
-    "huggingface-hub[hf-transfer]>=0.32.0",
+    "matplotlib",
+    "num2words",
+    "numpy",
     "opt-einsum>=3.4.0",
-    "kagglehub[hf-datasets]>=0.3.12",
-    "kaggle>=1.7.4.5",
-    "bitsandbytes>=0.46.1",
-    "google-cloud-storage>=3.2.0",
-    "wonderwords>=2.2.0",
-    "llmlingua>=0.2.2",
+    "pandas",
+    "peft",
+    "plotly",
+    "pyyaml",
+    "rouge-score",
+    "setuptools",
+    "tensorboard",
+    "tensorboardX",
+    "tokenizers",
+    "torch>=2.6.0",
+    "torchmetrics",
+    "torchvision>=0.21.0",
+    "transformers==4.51.3",
+    "wandb",
 ]
 
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pyright]
 exclude = [
@@ -53,32 +52,19 @@ exclude = [
     ".venv",
     ".github",
     ".vscode",
-    "chat_templates",
-    "eval_results",
-    "configs",
-    "EditingLlama",
-    "icae_v2",
-    "lm-evaluation-harness",
-    "llm-comparator",
-    "LongBench",
-    "scripts",
-    "train_outputs",
-    "./data/",
-    "/data/",
-    "generated_tasks",
+    "assets",
+    "checkpoints",
+    "data",
     "outputs",
-    "plots",
+    "runs",
     "tmp",
     "wandb",
-    ".wandb",
-    ".ruff_cache",
-    "assets",
 ]
 typeCheckingMode = "off"
 
 [tool.ruff]
 line-length = 88
-select = ["F401"]   # remove unused imports
+select = ["F401"]
 ignore = ["E", "F"]
 
 [tool.isort]

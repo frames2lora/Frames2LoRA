@@ -1,85 +1,25 @@
-"""Unified tracking interface combining timing and CUDA memory usage.
-
-Primary API
------------
-add_tracker(bound_method, name)
-    Wraps a bound instance method so that each invocation records:
-      - wall-clock duration (seconds) in timer.TIMER_REGISTRY[name]
-      - CUDA peak memory increase (bytes) in cuda_memory_tracker.MEMORY_REGISTRY[name]
-        (only if CUDA + torch available; otherwise memory list may stay empty / absent)
-
-print_tracker_stats(name=None)
-    Convenience printer that delegates to time + memory aggregate printers.
-
-Design
-------
-We implement a single wrapper (instead of nesting the individual timer & memory
-wrappers) to avoid multiple layers of indirection and to ensure the measured
-CUDA memory footprint reflects only the original method's body (excluding the
-separate timing wrapper's slight overhead). The wrapper is idempotent: repeated
-calls to add_tracker on the same method are ignored.
-
-This file depends on sibling modules:
-- tracker.timer
-- tracker.cuda_memory_tracker
-
-Both registries remain the single source of truth; no additional registry is introduced.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
 from time import perf_counter
 from typing import Any
 
-# Support both package (relative) and direct script execution.
-try:  # Package / normal import path
-    from .cuda_memory_tracker import (  # type: ignore
-        MEMORY_REGISTRY,
-        compute_aggregate_memory_stats,
-        print_aggregate_memory_stats,
-        print_global_memory_stats,
-        reset_memory_trackers,
-        save_memory_stats_csv,
-    )
-    from .timer import (  # type: ignore
-        TIMER_REGISTRY,
-        compute_aggregate_timer_stats,
-        print_aggregate_timer_stats,
-        print_global_timer_stats,
-        reset_timers,
-        save_timer_stats_csv,
-    )
-except Exception:  # pragma: no cover - fallback when executed directly
-    import pathlib
-    import sys
-
-    _this_file = pathlib.Path(__file__).resolve()
-    # project root is two levels up from tracker/ (i.e., .../src)
-    _src_root = _this_file.parents[2]
-    if str(_src_root) not in sys.path:
-        sys.path.insert(0, str(_src_root))
-    try:
-        from ctx_to_lora.tracker.cuda_memory_tracker import (  # type: ignore
-            MEMORY_REGISTRY,
-            compute_aggregate_memory_stats,
-            print_aggregate_memory_stats,
-            print_global_memory_stats,
-            reset_memory_trackers,
-            save_memory_stats_csv,
-        )
-        from ctx_to_lora.tracker.timer import (  # type: ignore
-            TIMER_REGISTRY,
-            compute_aggregate_timer_stats,
-            print_aggregate_timer_stats,
-            print_global_timer_stats,
-            reset_timers,
-            save_timer_stats_csv,
-        )
-    except Exception as e:  # If still failing, raise a clearer error.
-        raise ImportError(
-            f"Failed to import tracking dependencies; ensure project root on PYTHONPATH. Original: {e}"
-        )
+from .cuda_memory_tracker import (  # type: ignore
+    MEMORY_REGISTRY,
+    compute_aggregate_memory_stats,
+    print_aggregate_memory_stats,
+    print_global_memory_stats,
+    reset_memory_trackers,
+    save_memory_stats_csv,
+)
+from .timer import (  # type: ignore
+    TIMER_REGISTRY,
+    compute_aggregate_timer_stats,
+    print_aggregate_timer_stats,
+    print_global_timer_stats,
+    reset_timers,
+    save_timer_stats_csv,
+)
 
 try:  # Optional torch import (lazy fallback if unavailable)
     import torch  # type: ignore

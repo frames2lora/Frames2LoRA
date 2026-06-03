@@ -87,6 +87,16 @@ def get_hypernet_config(
     aggregator_args: AggregatorArguments,
     ctx_encoder_args: CtxEncoderArguments,
 ):
+    base_model_config = model.config
+    if getattr(base_model_config, "hidden_size", None) is not None:
+        base_hidden_size = base_model_config.hidden_size
+    elif getattr(base_model_config, "text_config", None) is not None:
+        base_hidden_size = base_model_config.text_config.hidden_size
+    else:
+        raise AttributeError(
+            f"Could not determine hidden size from config type {type(base_model_config)!r}"
+        )
+
     num_modules = 0
     lora_config = getattr(model, "peft_config", None)
     if lora_config is not None:
@@ -96,7 +106,7 @@ def get_hypernet_config(
     indices = torch.arange(get_num_layers(model), device=model.device)
     return HypernetConfig(
         **vars(hypernet_args),
-        base_hidden_size=model.config.hidden_size,
+        base_hidden_size=base_hidden_size,
         lora_config=lora_config,
         layer_indices=indices,
         feature_sizes=get_peft_in_out_features(model, peft_config=lora_config),
@@ -466,6 +476,17 @@ class ModulatedPretrainedModel(nn.Module):
         self._init_model()
         self._bias_hyper_init()
 
+    def _runtime_device(
+        self,
+        ctx_ids: Tensor | None = None,
+        ctx_features: Tensor | None = None,
+        input_ids: Tensor | None = None,
+    ) -> torch.device:
+        for tensor in (ctx_features, ctx_ids, input_ids):
+            if tensor is not None:
+                return tensor.device
+        return next(self.base_model.parameters()).device
+
     @classmethod
     def from_state_dict(
         cls,
@@ -533,6 +554,9 @@ class ModulatedPretrainedModel(nn.Module):
         self.patch_lora_forward()
 
         ctx_model_name = self.ctx_encoder_args.ctx_encoder_model_name_or_path
+        if ctx_model_name == "precomputed":
+            self.ctx_encoder = None
+            return
         if ctx_model_name is None:
             ctx_model_name = self.base_model.config.name_or_path
         # use an explicit copy of the base model
@@ -588,7 +612,9 @@ class ModulatedPretrainedModel(nn.Module):
 
     def state_dict(self, *args, **kwargs):
         # we assume ctx_encoder and base model is frozen here
-        if len([p for p in self.ctx_encoder.parameters() if p.requires_grad]):
+        if self.ctx_encoder is not None and len(
+            [p for p in self.ctx_encoder.parameters() if p.requires_grad]
+        ):
             raise ValueError("ctx_encoder contains trainable parameters")
         if len([p for p in self.base_model.parameters() if p.requires_grad]):
             raise ValueError("base model contains trainable parameters")
@@ -630,43 +656,51 @@ class ModulatedPretrainedModel(nn.Module):
         ctx_ids: Integer[Tensor, "bs ctx_len"],
         ctx_attn_mask: Integer[Tensor, "bs ctx_len"] | None = None,
         ctx_position_ids: Integer[Tensor, "bs ctx_len"] | None = None,
+        ctx_features: Float[Tensor, "bs ctx_len hidden_size"] | None = None,
         **kwargs: Any,
     ):
-        with torch.no_grad():
-            ctx_encoder_kwargs = dict(
-                input_ids=ctx_ids,
-                attention_mask=ctx_attn_mask,
-                position_ids=ctx_position_ids,
-            )
-            if isinstance(self.ctx_encoder.base_model, ModernBertModel):
-                position_ids = ctx_position_ids.flatten()
-                indices = torch.arange(
-                    position_ids.size(0), device=position_ids.device, dtype=torch.int32
+        if ctx_features is None:
+            if self.ctx_encoder is None:
+                raise ValueError(
+                    "ctx_features must be provided when ctx_encoder_model_name_or_path='precomputed'"
                 )
-                # [bsz + 1]
-                cu_seqlens = torch.cat(
-                    (
-                        indices[position_ids == 0],
-                        torch.tensor(
-                            position_ids.size(),
-                            device=position_ids.device,
-                            dtype=torch.int32,
-                        ),
-                    )
-                )
+            with torch.no_grad():
                 ctx_encoder_kwargs = dict(
-                    input_ids=ctx_ids.squeeze(0),
-                    cu_seqlens=cu_seqlens,
-                    max_seqlen=position_ids.max() + 1,
-                    attention_mask=-1,
-                    seq_len=-1,
-                    batch_size=-1,
+                    input_ids=ctx_ids,
+                    attention_mask=ctx_attn_mask,
+                    position_ids=ctx_position_ids,
                 )
+                if isinstance(self.ctx_encoder.base_model, ModernBertModel):
+                    position_ids = ctx_position_ids.flatten()
+                    indices = torch.arange(
+                        position_ids.size(0),
+                        device=position_ids.device,
+                        dtype=torch.int32,
+                    )
+                    # [bsz + 1]
+                    cu_seqlens = torch.cat(
+                        (
+                            indices[position_ids == 0],
+                            torch.tensor(
+                                position_ids.size(),
+                                device=position_ids.device,
+                                dtype=torch.int32,
+                            ),
+                        )
+                    )
+                    ctx_encoder_kwargs = dict(
+                        input_ids=ctx_ids.squeeze(0),
+                        cu_seqlens=cu_seqlens,
+                        max_seqlen=position_ids.max() + 1,
+                        attention_mask=-1,
+                        seq_len=-1,
+                        batch_size=-1,
+                    )
 
-            ctx_features = self.ctx_encoder(**ctx_encoder_kwargs, **kwargs)
+                ctx_features = self.ctx_encoder(**ctx_encoder_kwargs, **kwargs)
 
-        if isinstance(self.ctx_encoder.base_model, ModernBertModel):
-            ctx_features = ctx_features.unsqueeze(0)
+            if isinstance(self.ctx_encoder.base_model, ModernBertModel):
+                ctx_features = ctx_features.unsqueeze(0)
         if self.user_defined_scaling == 1:
             return self.hypernet.generate_weights(
                 ctx_features, ctx_attn_mask, ctx_position_ids
@@ -688,6 +722,7 @@ class ModulatedPretrainedModel(nn.Module):
         ctx_ids: Integer[Tensor, "n_ctx ctx_len"] | None = None,
         ctx_attn_mask: Integer[Tensor, "n_ctx ctx_len"] | None = None,
         ctx_position_ids: Integer[Tensor, "n_ctx ctx_len"] | None = None,
+        ctx_features: Float[Tensor, "n_ctx ctx_len hidden_size"] | None = None,
         n_ctx_chunks: Integer[Tensor, "n_ctx"] | None = None,
         n_queries: Integer[Tensor, "n_ctx"] | None = None,
         return_generated_lora: bool | None = False,
@@ -697,7 +732,12 @@ class ModulatedPretrainedModel(nn.Module):
         """Forward pass of the modulated model."""
         generated_loras = None
         generated_layernorms = None
-        if ctx_ids is None and not self.use_base_input_as_ctx:
+        runtime_device = self._runtime_device(
+            ctx_ids=ctx_ids,
+            ctx_features=ctx_features,
+            input_ids=model_inputs_kwargs.get("input_ids"),
+        )
+        if ctx_ids is None and ctx_features is None and not self.use_base_input_as_ctx:
             logger.warning(
                 (
                     "*" * 100,
@@ -724,7 +764,10 @@ class ModulatedPretrainedModel(nn.Module):
                     else None
                 )
             generated_loras, generated_layernorms = self.generate_weights(
-                ctx_ids, ctx_attn_mask, ctx_position_ids
+                ctx_ids,
+                ctx_attn_mask,
+                ctx_position_ids,
+                ctx_features=ctx_features,
             )
 
         if generated_loras is not None:
@@ -745,9 +788,19 @@ class ModulatedPretrainedModel(nn.Module):
             )
 
             if n_queries is None:
-                if ctx_position_ids is None:
+                if not self.use_sequence_packing:
+                    ctx_batch_size = (
+                        ctx_ids.shape[0] if ctx_ids is not None else ctx_features.shape[0]
+                    )
                     n_queries = torch.ones(
-                        ctx_ids.shape[0], dtype=torch.int32, device=self.device
+                        ctx_batch_size, dtype=torch.int32, device=runtime_device
+                    )
+                elif ctx_position_ids is None:
+                    ctx_batch_size = (
+                        ctx_ids.shape[0] if ctx_ids is not None else ctx_features.shape[0]
+                    )
+                    n_queries = torch.ones(
+                        ctx_batch_size, dtype=torch.int32, device=runtime_device
                     )
                 else:
                     # quite redundant (we do cu_seqlens many places)
@@ -755,7 +808,7 @@ class ModulatedPretrainedModel(nn.Module):
                     n_queries = torch.ones(
                         (ctx_position_ids == 0).sum(),
                         dtype=torch.int32,
-                        device=self.device,
+                        device=runtime_device,
                     )
 
             apply_lora_to_layers(
@@ -825,6 +878,10 @@ class ModulatedPretrainedModel(nn.Module):
         *model_inputs_args: Any,
         **model_inputs_kwargs: dict[str, Any],
     ):
+        runtime_device = self._runtime_device(
+            ctx_ids=ctx_ids,
+            input_ids=model_inputs_kwargs.get("input_ids"),
+        )
         generated_loras = None
         generated_layernorms = None
         if (
@@ -840,7 +897,7 @@ class ModulatedPretrainedModel(nn.Module):
         elif ctx_ids is None and self.generated_loras:
             generated_loras = self.generated_loras
             if n_ctx_chunks is None:
-                n_ctx_chunks = torch.tensor((1,), device=self.device)
+                n_ctx_chunks = torch.tensor((1,), device=runtime_device)
             print(
                 "*" * 100
                 + "\n\nUsing internalized LoRAs for generation\n\n"
@@ -890,7 +947,7 @@ class ModulatedPretrainedModel(nn.Module):
                     n_queries = torch.ones(
                         model_inputs_kwargs["input_ids"].shape[0],
                         dtype=torch.int32,
-                        device=self.device,
+                        device=runtime_device,
                     )
                 else:
                     # quite redundant (we do cu_seqlens many places)
@@ -898,7 +955,7 @@ class ModulatedPretrainedModel(nn.Module):
                     n_queries = torch.ones(
                         (ctx_position_ids == 0).sum(),
                         dtype=torch.int32,
-                        device=self.device,
+                        device=runtime_device,
                     )
 
             apply_lora_to_layers(

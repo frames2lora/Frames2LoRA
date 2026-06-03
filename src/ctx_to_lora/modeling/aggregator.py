@@ -112,7 +112,7 @@ class Perceiver(nn.Module):
             n_latents=n_latent_queries,
             intermediate_size_factor=4,
             hidden_size=output_size,
-            attn_implementation="flash_attention_2",
+            attn_implementation="sdpa",
         )
         self.decoder_config = Idefics2PerceiverConfig(
             input_size=output_size,
@@ -122,7 +122,7 @@ class Perceiver(nn.Module):
             n_latents=n_output_queries,
             intermediate_size_factor=4,
             hidden_size=output_size,
-            attn_implementation="flash_attention_2",
+            attn_implementation="sdpa",
         )
         self.perceiver = Idefics2Perceiver(self.config, self.decoder_config)
         self.iterative_mode = False
