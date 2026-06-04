@@ -2,7 +2,7 @@
 
 # Video2LoRA: Parametric Video Internalization for Vision-Language Models
 
-Official PyTorch implementation of **Video2LoRA**
+Official implementation of **Video2LoRA**
 
 [**Manan Suri**](https://manansuri.com/) &nbsp;&middot;&nbsp; [**Sarvesh Baskar**](https://orcid.org/0009-0006-3831-6811) &nbsp;&middot;&nbsp; [**Dinesh Manocha**](https://www.cs.umd.edu/people/dmanocha)
 
