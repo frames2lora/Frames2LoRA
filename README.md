@@ -1,12 +1,29 @@
-# Video2LoRA
+<div align="center">
 
-Video2LoRA trains a hypernetwork that converts a video into LoRA weights for a
-frozen vision-language model. The generated adapter lets the model answer later
-text prompts without feeding the video tokens again.
+# Video2LoRA: Parametric Video Internalization for Vision-Language Models
+
+Official PyTorch implementation of **Video2LoRA**
+
+[**Manan Suri**](https://manansuri.com/) &nbsp;&middot;&nbsp; [**Sarvesh Baskar**](https://orcid.org/0009-0006-3831-6811) &nbsp;&middot;&nbsp; [**Dinesh Manocha**](https://www.cs.umd.edu/people/dmanocha)
+
+*University of Maryland, College Park*
+
+[![project page](https://img.shields.io/badge/🌐_project-page-3b82f6?style=flat-square)](https://video2lora.github.io/)
+[![arxiv paper](https://img.shields.io/badge/📄_arxiv_paper-2606.04351-b31b1b?style=flat-square)](https://arxiv.org/abs/2606.04351)
+[![hf checkpoints](https://img.shields.io/badge/🤗_checkpoints-Video2LoRA-orange?style=flat-square)](https://huggingface.co/MananSuri27/Video2LoRA-SmolVLM-ckpts)
+[![license](https://img.shields.io/badge/⚖️_license-MIT-gray?style=flat-square)](LICENSE)
+
+---
+
+### [Install](#install) &nbsp;&bull;&nbsp; [Checkpoints](#checkpoints) &nbsp;&bull;&nbsp; [Inference](#inference) &nbsp;&bull;&nbsp; [Data Format](#data-format) &nbsp;&bull;&nbsp; [Training](#train)
 
 <p align="center">
   <img src="assets/video2lora-animated-diagram.svg" alt="Animated Video2LoRA method diagram" width="900">
 </p>
+
+</div>
+
+Video2LoRA trains a hypernetwork that converts a video into LoRA weights for a frozen vision-language model. The generated adapter lets the model answer later text prompts without feeding the video tokens again.
 
 ## Install
 
