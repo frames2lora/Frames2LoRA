@@ -201,22 +201,6 @@ def run_internalization(example, model, raw_model, processor, config, device):
     return generated_loras
 
 
-def get_video_base64(video_path):
-    """
-    Reads a local video file and encodes it to a base64 data URI to play in sandboxed Colab iframes.
-    """
-    if not os.path.exists(video_path):
-        return ""
-    try:
-        with open(video_path, "rb") as f:
-            data = f.read()
-        b64_str = base64.b64encode(data).decode("utf-8")
-        return f"data:video/mp4;base64,{b64_str}"
-    except Exception as e:
-        print(f"Warning: Failed to encode video {video_path} to base64: {e}")
-        return ""
-
-
 def display_comparison(
     video_path,
     question_prompt,
@@ -228,12 +212,13 @@ def display_comparison(
     """
     Renders a beautifully styled comparison board with local HTML5 video player.
     """
-    video_src = get_video_base64(video_path)
-    if not video_src:
-        if video_path.startswith(("http://", "https://")):
-            video_src = video_path
-        else:
-            video_src = f"https://video2lora.github.io/{video_path}"
+    # Use the hosted website URL directly to avoid embedding massive base64 binaries
+    # that would exceed GitHub's 100 MB file limit.
+    if video_path.startswith(("http://", "https://")):
+        video_src = video_path
+    else:
+        video_src = f"https://video2lora.github.io/{video_path}"
+
         
     html_content = f"""
     <div style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 900px; margin: 20px auto; color: #1e293b; background-color: #f8fafc; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
